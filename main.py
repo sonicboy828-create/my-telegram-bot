@@ -6,7 +6,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-TOKEN = "8673757379:AAGOKLwkHxDZaIOD09MDqzYByACKVJW5JpE"
+# Render ထဲက Environment Variable (`BOT_TOKEN`) ကို ယူသုံးစေရန် ပြင်ဆင်လိုက်သည်
+TOKEN = os.environ.get('BOT_TOKEN')
 EXCEL_FILE = "31_items_clean_list.xlsx"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -21,7 +22,7 @@ def search_items(query):
     try:
         df = pd.read_excel(EXCEL_FILE)
     except Exception as e:
-        return "❌ Excel ဖိုင်ကို ဖတ်လို့မရပါ။"
+        return "❌ Excel ဖိုင်ကို ဖတ်လို့မရပါ။ (GitHub ထဲတွင် '31_items_clean_list.xlsx' ဖိုင် ရှိမရှိ စစ်ဆေးပါ)"
     
     results = df[df['Items & Types'].str.lower().str.contains(query, na=False)]
     if results.empty:
@@ -50,6 +51,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(reply_text, parse_mode="Markdown")
 
 def main():
+    if not TOKEN:
+        logging.error("BOT_TOKEN is missing! Please set it in Render Environment variables.")
+        return
+
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
