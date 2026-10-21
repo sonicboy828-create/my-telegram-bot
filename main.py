@@ -1,28 +1,42 @@
 import os
 import logging
 import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Render ထဲက Environment Variable (`BOT_TOKEN`) ကို ယူသုံးစေရန် ပြင်ဆင်လိုက်သည်
 TOKEN = os.environ.get('BOT_TOKEN')
-EXCEL_FILE = "31_items_clean_list.xlsx"
+GOOGLE_SHEET_NAME = "MT worksheet"
+  # ကိုယ့်ရဲ့ Google Sheet နာမည်ကို ထည့်ပါ
+
+def get_google_sheet_data():
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+        client = gspread.authorize(creds)
+        sheet = client.open(GOOGLE_SHEET_NAME).sheet1
+        data = sheet.get_all_records()
+        df = pd.DataFrame(data)
+        return df
+    except Exception as e:
+        logging.error(f"Google Sheet ဖတ်ရာတွင် အမှားဖြစ်နေသည်: {e}")
+        return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     welcome_text = (
-        "👋 မင်္ဂလာပါ အကို။ 31's Items စျေးနှုန်းရှာဖွေရေး Bot ဖြစ်ပါတယ်။\n\n"
+        "👋 မင်္ဂလာပါ အကို။ 31's Items စျေးနှုန်းရှာဖွေရေး Bot (Google Sheet Version) ဖြစ်ပါတယ်။\n\n"
         "🔍 ပစ္စည်းအမည်ရဲ့ စာလုံးအစကို ရိုက်ထည့်ပြီး ရှာဖွေနိုင်ပါတယ်ဗျာ။"
     )
     await update.message.reply_text(welcome_text)
 
 def search_items(query):
     query = str(query).strip().lower()
-    try:
-        df = pd.read_excel(EXCEL_FILE)
-    except Exception as e:
-        return "❌ Excel ဖိုင်ကို ဖတ်လို့မရပါ။ (GitHub ထဲတွင် '31_items_clean_list.xlsx' ဖိုင် ရှိမရှိ စစ်ဆေးပါ)"
+    df = get_google_sheet_data()
+    if df is None:
+        return "❌ Google Sheet ကို ချိတ်ဆက်၍ မရပါ။ credentials.json နှင့် Sheet နာမည်ကို စစ်ဆေးပါ။"
     
     results = df[df['Items & Types'].str.lower().str.contains(query, na=False)]
     if results.empty:
@@ -59,7 +73,6 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Render cloud server ပေါ်မှာ run ဖို့ web port ဖွင့်ပေးခြင်း
     from flask import Flask
     import threading
     flask_app = Flask('')
