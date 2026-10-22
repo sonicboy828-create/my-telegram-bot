@@ -1,19 +1,10 @@
 import os
-import threading
-from flask import Flask
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
 
-# Render Port Error မတက်စေရန် Flask Web Server တည်ဆောက်ခြင်း
-app_flask = Flask(__name__)
-
-@app_flask.route('/')
-def home():
-    return "Bot is running!"
-
-# Google Sheets API နှင့် Credentials ချိတ်ဆက်ခြင်း
+# 1. Google Sheets API နှင့် Credentials ချိတ်ဆက်ခြင်း
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
 cred_path = "/etc/secrets/credentials.json"
@@ -26,7 +17,7 @@ client = gspread.authorize(creds)
 # Google Sheet နာမည် 'MT worksheet' ကို ချိတ်ဆက်ခြင်း
 sheet = client.open("MT worksheet").sheet1
 
-# Telegram Bot Commands & Message Handler
+# 2. Telegram Bot Commands & Message Handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_message = (
         "👋 မင်္ဂလာပါ အကို။ 31's Items ဈေးနှုန်းနှင့် ရှာဖွေရေး Bot (Google Sheet Version) ဖြစ်ပါတယ်။\n\n"
@@ -57,7 +48,7 @@ async def search_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text("❌ Google Sheet ကို ချိတ်ဆက်၍ မရပါ။ credentials.json နှင့် Sheet နာမည်ကို စစ်ဆေးပါ။")
 
-def run_telegram_bot():
+def main():
     TOKEN = os.getenv("BOT_TOKEN")
     if not TOKEN:
         print("Error: BOT_TOKEN is not set in environment variables.")
@@ -72,10 +63,4 @@ def run_telegram_bot():
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
-    # Telegram Bot ကို Background Thread ဖြင့် ဖွင့်ခြင်း
-    bot_thread = threading.Thread(target=run_telegram_bot)
-    bot_thread.start()
-    
-    # Render မှပေးမည့် Port ဖြင့် Flask Server ကို စတင်ခြင်း
-    port = int(os.environ.get("PORT", 10000))
-    app_flask.run(host="0.0.0.0", port=port)
+    main()
