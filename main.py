@@ -13,15 +13,25 @@ app_flask = Flask(__name__)
 def home():
     return "Bot is running!"
 
-# Google Sheet ချိတ်ဆက်ခြင်း
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-cred_path = "/etc/secrets/credentials.json"
-if not os.path.exists(cred_path):
-    cred_path = "credentials.json"
+# Google Sheet ချိတ်ဆက်ခြင်းအတွက် Function
+def get_sheet_data():
+    try:
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        
+        # Render Secret Files လမ်းကြောင်း သို့မဟုတ် Local လမ်းကြောင်းကို တိကျစွာ သတ်မှတ်ခြင်း
+        cred_path = "/etc/secrets/credentials.json"
+        if not os.path.exists(cred_path):
+            cred_path = "credentials.json"
 
-creds = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scope)
-client = gspread.authorize(creds)
-sheet = client.open("MT worksheet").sheet1
+        creds = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scope)
+        client = gspread.authorize(creds)
+        
+        # Google Sheet နာမည် 'MT worksheet' ကို ချိတ်ဆက်ခြင်း
+        sheet = client.open("MT worksheet").sheet1
+        return sheet.get_all_records()
+    except Exception as e:
+        print(f"Google Sheet Connection Error: {e}")
+        return None
 
 # Telegram Bot Commands & Message Handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -35,10 +45,14 @@ async def search_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.message.text.strip()
     
     try:
-        data = sheet.get_all_records()
+        data = get_sheet_data()
+        if data is None:
+            await update.message.reply_text("❌ Google Sheet ကို ချိတ်ဆက်၍ မရပါ။ credentials.json ဖိုင်နှင့် Sheet နာမည်ကို စစ်ဆေးပါ။")
+            return
         
         found_results = []
         for row in data:
+            # Sheet ထဲရှိ Column ခေါင်းစဉ် 'Item' ဖြစ်ကြောင်း သေချာစေရန်
             item_name = str(row.get("Item", "")) 
             if query.lower() in item_name.lower():
                 found_results.append(row)
@@ -52,10 +66,10 @@ async def search_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ '{query}' ဆိုသော ပစ္စည်းကို ရှမတွေ့ပါ စာလုံးပေါင်း သေချာစစ်ဆေးပါ။")
             
     except Exception as e:
-        await update.message.reply_text("❌ ဒေတာဖတ်ရှုရာတွင် အမှားအယွင်းရှိပါသည် စစ်ဆေးပါ။")
+        await update.message.reply_text(f"❌ အမှားအယွင်းရှိပါသည်: {str(e)}")
 
 if __name__ == "__main__":
-    # Flask ဆာဗာကို Background Thread ဖြင့် စတင်ခြင်း (Render Port ဖြေရှင်းရန်)
+    # Flask ဆာဗာကို Background Thread ဖြင့် စတင်ခြင်း
     def run_flask():
         port = int(os.environ.get("PORT", 10000))
         app_flask.run(host="0.0.0.0", port=port)
@@ -64,7 +78,7 @@ if __name__ == "__main__":
     flask_thread.daemon = True
     flask_thread.start()
     
-    # Telegram Bot ကို Main Thread တွင် တိုက်ရိုက် run ခြင်း (Error လုံးဝမတက်စေရန်)
+    # Telegram Bot ကို Main Thread တွင် တိုက်ရိုက် run ခြင်း
     TOKEN = os.getenv("BOT_TOKEN")
     if not TOKEN:
         print("Error: BOT_TOKEN is not set in environment variables.")
