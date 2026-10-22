@@ -6,30 +6,22 @@ from oauth2client.service_account import ServiceAccountCredentials
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
 
-# 1. Render Port Error မတက်စေရန် Flask Web Server ကို ချက်ချင်းစတင်ခြင်း
+# 1. Flask Web Server (Render Port အတွက်)
 app_flask = Flask(__name__)
 
 @app_flask.route('/')
 def home():
     return "Bot is running!"
 
-# Global variables
-sheet = None
+# Google Sheet ချိတ်ဆက်ခြင်း
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+cred_path = "/etc/secrets/credentials.json"
+if not os.path.exists(cred_path):
+    cred_path = "credentials.json"
 
-def init_google_sheet():
-    global sheet
-    try:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        cred_path = "/etc/secrets/credentials.json"
-        if not os.path.exists(cred_path):
-            cred_path = "credentials.json"
-
-        creds = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scope)
-        client = gspread.authorize(creds)
-        sheet = client.open("MT worksheet").sheet1
-        print("Google Sheet connected successfully!")
-    except Exception as e:
-        print(f"Google Sheet Connection Error: {e}")
+creds = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scope)
+client = gspread.authorize(creds)
+sheet = client.open("MT worksheet").sheet1
 
 # Telegram Bot Commands & Message Handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -40,11 +32,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_message)
 
 async def search_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global sheet
-    if not sheet:
-        await update.message.reply_text("❌ Google Sheet ချိတ်ဆက်နေဆဲ ဖြစ်ပါသည် ခဏစောင့်ပါ။")
-        return
-
     query = update.message.text.strip()
     
     try:
@@ -65,29 +52,26 @@ async def search_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ '{query}' ဆိုသော ပစ္စည်းကို ရှမတွေ့ပါ စာလုံးပေါင်း သေချာစစ်ဆေးပါ။")
             
     except Exception as e:
-        await update.message.reply_text("❌ ဒေတာဖတ်ရှုရာတွင် အမှားအယွင်းရှိပါသည်ဆစစ်ဆေးပါ။")
+        await update.message.reply_text("❌ ဒေတာဖတ်ရှုရာတွင် အမှားအယွင်းရှိပါသည် စစ်ဆေးပါ။")
 
-def run_telegram_bot():
+if __name__ == "__main__":
+    # Flask ဆာဗာကို Background Thread ဖြင့် စတင်ခြင်း (Render Port ဖြေရှင်းရန်)
+    def run_flask():
+        port = int(os.environ.get("PORT", 10000))
+        app_flask.run(host="0.0.0.0", port=port)
+
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+    
+    # Telegram Bot ကို Main Thread တွင် တိုက်ရိုက် run ခြင်း (Error လုံးဝမတက်စေရန်)
     TOKEN = os.getenv("BOT_TOKEN")
     if not TOKEN:
         print("Error: BOT_TOKEN is not set in environment variables.")
-        return
-
-    # Google Sheet ကို Background Thread ဖြင့် ချိတ်ဆက်ခြင်း
-    init_google_sheet()
-
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), search_item))
-    
-    print("Telegram Bot is running...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
-
-if __name__ == "__main__":
-    # Telegram Bot ကို Background Thread ဖြင့် ဖွင့်ခြင်း
-    bot_thread = threading.Thread(target=run_telegram_bot)
-    bot_thread.start()
-    
-    # Render မှပေးမည့် Port ဖြင့် Flask Server ကို ချက်ချင်းစတင်ခြင်း (Port Timeout ကာကွယ်ရန်)
-    port = int(os.environ.get("PORT", 10000))
-    app_flask.run(host="0.0.0.0", port=port)
+    else:
+        app = ApplicationBuilder().token(TOKEN).build()
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), search_item))
+        
+        print("Telegram Bot is running successfully...")
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
