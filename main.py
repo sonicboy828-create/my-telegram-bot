@@ -18,7 +18,6 @@ def get_sheet_data():
     try:
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         
-        # Render Secret Files လမ်းကြောင်း သို့မဟုတ် Local လမ်းကြောင်းကို တိကျစွာ သတ်မှတ်ခြင်း
         cred_path = "/etc/secrets/credentials.json"
         if not os.path.exists(cred_path):
             cred_path = "credentials.json"
@@ -26,8 +25,8 @@ def get_sheet_data():
         creds = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scope)
         client = gspread.authorize(creds)
         
-        # Google Sheet နာမည် 'MT worksheet' ကို ချိတ်ဆက်ခြင်း
-        sheet = client.open("MT worksheet").sheet1
+        # Google Sheet ဖိုင်နာမည်မှာ 'Items' ဖြစ်ပြီး၊ Tab နာမည်က ပထမဆုံး Tab ဖြစ်ပါသည်
+        sheet = client.open("Items").sheet1
         return sheet.get_all_records()
     except Exception as e:
         print(f"Google Sheet Connection Error: {e}")
@@ -47,20 +46,20 @@ async def search_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = get_sheet_data()
         if data is None:
-            await update.message.reply_text("❌ Google Sheet ကို ချိတ်ဆက်၍ မရပါ။ credentials.json ဖိုင်နှင့် Sheet နာမည်ကို စစ်ဆေးပါ။")
+            await update.message.reply_text("❌ Google Sheet ကို ချိတ်ဆက်၍ မရပါ။ credentials.json ဖိုင်ကို စစ်ဆေးပါ။")
             return
         
         found_results = []
         for row in data:
-            # Sheet ထဲရှိ Column ခေါင်းစဉ် 'Item' ဖြစ်ကြောင်း သေချာစေရန်
-            item_name = str(row.get("Item", "")) 
+            # Sheet ထဲရှိ Column ခေါင်းစဉ် 'Items&types' နှင့် ဈေးနှုန်းအတွက် 'P-Prices' ကို ယူသုံးခြင်း
+            item_name = str(row.get("Items&types", "")) 
             if query.lower() in item_name.lower():
                 found_results.append(row)
                 
         if found_results:
             response_text = ""
             for item in found_results:
-                response_text += f"📦 ပစ္စည်း: {item.get('Item')}\n💰 ဈေးနှုန်း: {item.get('Price')}\n-------------------\n"
+                response_text += f"📦 ပစ္စည်း: {item.get('Items&types')}\n💰 ဈေးနှုန်း (P-Prices): {item.get('P-Prices')}\n💰 ဈေးနှုန်း (Wholesale): {item.get('Wholesales prices')}\n-------------------\n"
             await update.message.reply_text(response_text)
         else:
             await update.message.reply_text(f"❌ '{query}' ဆိုသော ပစ္စည်းကို ရှမတွေ့ပါ စာလုံးပေါင်း သေချာစစ်ဆေးပါ။")
