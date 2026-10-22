@@ -2,7 +2,6 @@ import os
 import threading
 from flask import Flask
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters, CommandHandler
 
@@ -13,20 +12,16 @@ app_flask = Flask(__name__)
 def home():
     return "Bot is running!"
 
-# Google Sheet ချိတ်ဆက်ခြင်းအတွက် Function
+# Google Sheet ချိတ်ဆက်ခြင်းအတွက် Function (gspread service_account ကိုသုံးခြင်း)
 def get_sheet_data():
     try:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        
         cred_path = "/etc/secrets/credentials.json"
         if not os.path.exists(cred_path):
             cred_path = "credentials.json"
 
-        creds = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scope)
-        client = gspread.authorize(creds)
-        
-        # Google Sheet ဖိုင်နာမည်မှာ 'Items' ဖြစ်ပြီး၊ Tab နာမည်က ပထမဆုံး Tab ဖြစ်ပါသည်
-        sheet = client.open("Items").sheet1
+        # gspread ရဲ့ တရားဝင် service_account စနစ်ကို အသုံးပြုခြင်း
+        gc = gspread.service_account(filename=cred_path)
+        sheet = gc.open("Items").sheet1
         return sheet.get_all_records()
     except Exception as e:
         print(f"Google Sheet Connection Error: {e}")
@@ -46,12 +41,11 @@ async def search_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = get_sheet_data()
         if data is None:
-            await update.message.reply_text("❌ Google Sheet ကို ချိတ်ဆက်၍ မရပါ။ credentials.json ဖိုင်ကို စစ်ဆေးပါ။")
+            await update.message.reply_text("❌ Google Sheet ကို ချိတ်ဆက်၍ မရပါ။ credentials.json ဖိုင် သို့မဟုတ် Sheet နာမည်ကို စစ်ဆေးပါ။")
             return
         
         found_results = []
         for row in data:
-            # Sheet ထဲရှိ Column ခေါင်းစဉ် 'Items&types' နှင့် ဈေးနှုန်းအတွက် 'P-Prices' ကို ယူသုံးခြင်း
             item_name = str(row.get("Items&types", "")) 
             if query.lower() in item_name.lower():
                 found_results.append(row)
