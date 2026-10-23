@@ -24,7 +24,7 @@ def get_sheet_data():
         sheet = gc.open("Items").sheet1
         return sheet.get_all_records()
     except Exception as e:
-        print(f"Google Sheet Connection Error: {e}")
+        print(f"Google Sheet Connection Error: {e}", flush=True)
         return None
 
 # Telegram Bot Commands & Message Handler
